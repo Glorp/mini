@@ -6,11 +6,12 @@
 (provide write-html html doctype)
 
 (define normal-elements
-  (seteq 'html 'head 'title 'body 'h1 'h2 'h3 'p 'a 'em 'strong 'div 'pre 'code 'figure 'figcaption))
+  (seteq 'html 'head 'title 'body 'h1 'h2 'h3 'p 'a 'em 'strong 'div 'pre 'code 'figure 'figcaption
+         'form 'label 'textarea))
 (define void-elements
   (seteq 'br 'hr 'img 'input 'link 'meta))
 (define normal-attributes
-  (seteq 'lang 'charset 'alt 'href 'id 'src 'type))
+  (seteq 'lang 'charset 'alt 'href 'id 'src 'type 'action 'name 'value 'method))
 (define boolean-attributes
   (seteq 'checked))
 
@@ -75,10 +76,6 @@
   (write-symbol tag-name out)
   (write-char #\> out))
 
-(define (write-normal-empty-element tag-name attrs out)
-  (start-tag tag-name attrs out)
-  (write-string "/>" out))
-
 (define (write-void-element tag-name attrs out)
   (start-tag tag-name attrs out)
   (write-char #\> out))
@@ -86,14 +83,13 @@
 (define (attributes? x)
   (or (null? x) (and (list? x) (list? (first x)))))
 
-(define (write-empty-element tag-name attrs out)
-  (cond [(void-element? tag-name) (write-void-element tag-name attrs out)]
-           [(normal-element? tag-name) (write-normal-empty-element tag-name attrs out)]
-           [else (error 'write-html "bad tag name: ~a" tag-name)]))
-
 (define (write-element tag-name attrs children out)
   (cond [(normal-element? tag-name) (write-normal-element tag-name attrs children out)]
         [else (error 'write-html "bad (normal/non-void) tag name: ~a" tag-name)]))
+
+(define (write-empty-element tag-name attrs out)
+  (cond [(void-element? tag-name) (write-void-element tag-name attrs out)]
+        [else (write-element tag-name attrs '() out)]))
 
 (define (write-html content out)
   (match content
@@ -117,12 +113,12 @@
   (require rackunit)
   (check-equal? (html '(hr ())) "<hr>")
   (check-equal? (html '(hr)) "<hr>")
-  (check-equal? (html '(div ())) "<div/>")
-  (check-equal? (html '(div)) "<div/>")
+  (check-equal? (html '(div ())) "<div></div>")
+  (check-equal? (html '(div)) "<div></div>")
   (check-equal? (html '(p "ble<p")) "<p>ble&lt;p</p>")
   (check-equal? (html '(a ([href "./foo.html"]) "blap")) "<a href=\"./foo.html\">blap</a>")
   (check-equal? (html "ab<cd>ef&gh\"ij") "ab&lt;cd&gt;ef&amp;gh\"ij")
-  (check-equal? (html '(p ([id "ab<cd>ef&gh\"ij"]))) "<p id=\"ab&lt;cd&gt;ef&amp;gh&quot;ij\"/>")
+  (check-equal? (html '(p ([id "ab<cd>ef&gh\"ij"]))) "<p id=\"ab&lt;cd&gt;ef&amp;gh&quot;ij\"></p>")
   (check-equal?
    (html '(div ()
                (h1 ([id "stuf"]) "Some " (em () "stuff"))

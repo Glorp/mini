@@ -6,7 +6,9 @@
          seconds->day
          today
          day->string
+         maybe-day->string
          string->day
+         string->maybe-day
          add-days)
 
 (define (leap-year? y)
@@ -49,14 +51,17 @@
   (day (date-year d) (date-month d) (date-day d)))
 (define (today)
   (seconds->day (current-seconds)))
-  
+
+(define (valid? y m d)
+  (and (exact-positive-integer? y)
+               (and (exact-positive-integer? m) (> m 0) (<= m 12))
+               (and (exact-positive-integer? d) (> d 0) (<= d (days-in-month y m)))))
+
 (struct day (y m d)
   #:transparent
   #:guard
   (λ (y m d name)
-    (unless (and (exact-positive-integer? y)
-                 (and (exact-positive-integer? m) (> m 0) (<= m 12))
-                 (and (exact-positive-integer? d) (> d 0) (<= d (days-in-month y m))))
+    (unless (valid? y m d)
       (error 'day "not a valid day: (~a ~s ~s ~s)" name y m d))
     (values y m d)))
 
@@ -68,10 +73,22 @@
           (pad (day-m d) 2)
           (pad (day-d d) 2)))
 
-(define (string->day str)
+(define (maybe-day->string d)
+  (and (day? d) (day->string d)))
+
+(define (string->maybe-day str)
   (match (regexp-match #px"^(\\d+)-(\\d+)-(\\d+)$" str)
-    [(list _ y m d) (day (string->number y) (string->number m) (string->number d))]
-    [_ (error 'string->day "bad argument: ~a" str)]))
+    [(list _ ys ms ds)
+     (define y (string->number ys))
+     (define m (string->number ms))
+     (define d (string->number ds))
+     (and (valid? y m d)
+          (day y m d))]
+    [_ #f]))
+
+(define (string->day str)
+  (or (string->maybe-day str)
+      (error 'string->day "bad argument: ~a" str)))
 
 (module+ test
   (require rackunit)
