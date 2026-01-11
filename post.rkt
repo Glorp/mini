@@ -3,7 +3,11 @@
 (provide (struct-out post)
          (struct-out before)
          (struct-out after)
-         (struct-out in-thread))
+         (struct-out in-thread)
+         valid-text?)
+
+(define (valid-text? str)
+  (string? str) (<= (string-utf-8-length str) 1024))
 
 (struct post (day text thread)
   #:transparent
@@ -11,7 +15,7 @@
   (λ (day text thread name)
     (unless
         (and (day? day)
-             (and (string? text) (<= (string-utf-8-length text) 1024))
+             (valid-text? text)
              (or (not thread) (day? thread)))
       (error 'day "not a valid post: (~a ~s ~s)" name day text))
     (values day text thread)))

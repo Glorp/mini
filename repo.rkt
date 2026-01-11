@@ -7,7 +7,11 @@
          "post.rkt")
 
 (provide open-repo
-         close-repo)
+         close-repo
+         create-post
+         update-post
+         get-post
+         get-posts)
 
 (struct repo ([connection #:mutable]))
 

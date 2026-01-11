@@ -2,6 +2,8 @@
 (require racket/match
          racket/string)
 
+(provide parsedown)
+
 (define (line? str)
   (non-empty-string? (string-trim str)))
 
