@@ -38,8 +38,8 @@
   (define headers (list (header #"location" (string->bytes/utf-8 path))))
   (response 303 #"Sea Otter" (current-seconds) #f headers (λ (out) (void))))
 
-(define (bad str . args)
-  (define htmlx (page "400 Bad Request :(" `(body (h1 "Bad Request :(") (p ,(apply format str args)))))
+(define (bad body)
+  (define htmlx (page "400 Bad Request :(" body))
   (response 400 #"Not Found" (current-seconds) TEXT/HTML-MIME-TYPE '() (out-html htmlx)))
 
 (define index '(a ([href "/index.html"]) "back to index"))
@@ -82,15 +82,23 @@
         (define text (lfstring crlftext))
         (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
         (cond [(not dy) (not-found)]
-              [(not (valid-text? text)) (bad ">:( text too long: ~s" text)]
-              [(get-post r dy) (bad "there's already a post for ~a" (day->string dy))]
+              [(not (valid-text? text))
+               (match-define (list ok too-much) (valid-text-split text))
+               (bad `(body
+                      (h1 "text too long >:(")
+                      (p "okay: " ,(~s ok))
+                      (p "too much: " ,(~s too-much))))]
+              [(get-post r dy) (bad `(body (h1 "there's already a post for" (day->string dy))))]
               [else (create-post r (post dy text #f))
                     (ok "success :)"
                         `(body
                           (h1 "nice :)")
                           (p "created post for " ,(day->string dy))
                           (p ,index)))])]
-       [_ (bad "~s <- what is ??" bindings)])]
+       [_ (bad `(body
+                 (h1 "bad parameters")
+                 (p (~s bindings) " <- what is ??")
+                 (p "only want param called text")))])]
     [(#"POST" (list "next-day"))
      (set! the-day (add-days the-day 1))
      (sea-otter "/index.html")]
