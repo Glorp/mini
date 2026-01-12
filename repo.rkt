@@ -22,7 +22,7 @@
 
   (query-exec c (string-append "CREATE TABLE IF NOT EXISTS topic(\n"
                                "  id INTEGER PRIMARY KEY,\n"
-                               "  title TEXT\n"
+                               "  name TEXT\n"
                                ")"))
   (query-exec c (string-append "CREATE TABLE IF NOT EXISTS post(\n"
                                "  day TEXT PRIMARY KEY,\n"
@@ -105,8 +105,7 @@
   (unless
       (string? name)
     (error 'create-topic "name must be string: ~s" name))
-  (define row (query-row (con repo) "INSERT INTO topic (name) VALUES ($1) RETURNING id" name))
-  (topic (vector-ref row 0) name))
+  (topic (query-value (con repo) "INSERT INTO topic (name) VALUES ($1) RETURNING id" name) name))
 
 (define (update-topic repo tp)
   (match tp
@@ -122,6 +121,8 @@
 (module+ test
   (require (except-in rackunit before after))
   (define r (open-repo 'memory))
+  (define t (create-topic r "Hello"))
+  (check-equal? (topic-name t) "Hello")
   (define d1 (day 2026 01 01))
   (define d2 (day 2026 02 01))
   (define p1 (post d1 "beep" 0))
