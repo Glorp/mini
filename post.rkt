@@ -2,9 +2,12 @@
 (require "day.rkt")
 (provide (struct-out post)
          (struct-out topic)
+         (struct-out topics)
          (struct-out before)
          (struct-out after)
-         (struct-out in-topic)
+         (struct-out in-thread)
+         (struct-out with-tag)
+         (struct-out tagged)
          valid-text?
          valid-text-split)
 
@@ -21,29 +24,49 @@
 (define (valid-text-split str)
   (utf-8-split str 1024))
 
-(struct post (day text topic-id)
+(define (valid-id? id)
+  (regexp-match #px"^[a-z][a-z0-9-]*[a-z0-9]$" (symbol->string id)))
+
+(struct post (day text id link)
   #:transparent
   #:guard
-  (λ (day text topic-id name)
+  (λ (day text id link name)
     (unless
         (and (day? day)
              (valid-text? text)
-             (or (not topic-id) (exact-integer? topic-id)))
-      (error 'day "not a valid post: (~a ~s ~s)" name day text))
-    (values day text topic-id)))
+             (or (not id) (valid-id? id))
+             (or (not link) (string? link)))
+      (error 'day "not a valid post: (~a ~s ~s ~s ~s)" name day text id link))
+    (values day text id link)))
 
 (struct topic (id name)
   #:transparent
   #:guard
   (λ (id name struct-name)
-    (unless
-        (and (exact-integer? id) (string? name))
+    (unless (and (valid-id? id) (string? name))
       (error 'topic "not a valid topic: (~a ~s ~s)" struct-name id name))
     (values id name)))
 
+(struct topics (list hash)
+  #:transparent
+  #:guard
+  (λ (list hash name)
+    (unless (and (list? list) (hash? hash))
+      (error 'topic "not a valid topics: (~a ~s ~s)" name list hash))
+    (values list hash)))
+
+(struct tagged (day id)
+  #:transparent
+  #:guard
+  (λ (day id name)
+    (unless (and (day? day) (valid-id? id))
+      (error 'topic "not a valid tagged: (~a ~s ~s)" name day id))
+    (values day id)))
+
 (struct before (day) #:transparent)
 (struct after (day) #:transparent)
-(struct in-topic (day) #:transparent)
+(struct in-thread (id) #:transparent)
+(struct with-tag (id) #:transparent)
 
 (module+ test
   (require rackunit)
