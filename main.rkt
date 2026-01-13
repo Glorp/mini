@@ -73,7 +73,7 @@
     [(topic id name)
      (define id-str (symbol->string id))
      `((tr (th "In thread:")
-            (td (a ([href ,(format "/topic/~a" id-str)]) ,name " (" ,id-str ")"))))]
+            (td (a ([href ,(format "/topic/~a" id-str)]) ,name))))]
     [#f '()]))
 
 (define (html-section day text rows)
