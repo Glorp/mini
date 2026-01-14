@@ -90,7 +90,7 @@
      (define (pad v n)
        (~a v #:width n #:align 'right #:left-pad-string "0"))
      (define posts (get-posts r 'desc (before the-day)))
-     (ok "miniblag"
+     (ok "Miniature weblog"
          `(body
            (h1 "Miniature weblog")
            (p "Today really is " ,(day->string the-day))
