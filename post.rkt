@@ -1,5 +1,6 @@
 #lang racket/base
-(require "day.rkt")
+(require racket/match
+         "day.rkt")
 (provide (struct-out post)
          (struct-out topic)
          (struct-out topics)
@@ -24,42 +25,49 @@
 (define (valid-text-split str)
   (utf-8-split str 1024))
 
-(define (valid-id? id)
+(define (valid-topic-symbol? id)
   (regexp-match #px"^[a-z][a-z0-9-]*[a-z0-9]$" (symbol->string id)))
 
-(struct post (day text id link)
+(struct post (day text symbol link)
   #:transparent
   #:guard
-  (λ (day text id link name)
+  (λ (day text symbol link name)
     (unless
         (and (day? day)
              (valid-text? text)
-             (or (not id) (valid-id? id))
+             (or (not symbol) (valid-topic-symbol? symbol))
              (or (not link) (string? link)))
-      (error 'day "not a valid post: (~a ~s ~s ~s ~s)" name day text id link))
-    (values day text id link)))
+      (error 'day "not a valid post: (~a ~s ~s ~s ~s)" name day text symbol link))
+    (values day text symbol link)))
 
-(struct topic (id name)
+(define (topic-type? symbol)
+  (match symbol
+    ['neither #t]
+    ['thread #t]
+    ['tag #t]
+    ['either #t]))
+
+(struct topic (symbol name type)
   #:transparent
   #:guard
-  (λ (id name struct-name)
-    (unless (and (valid-id? id) (string? name))
-      (error 'topic "not a valid topic: (~a ~s ~s)" struct-name id name))
-    (values id name)))
+  (λ (symbol name type struct-name)
+    (unless (and (valid-topic-symbol? symbol) (string? name) (topic-type? type))
+      (error 'topic "not a valid topic: (~a ~s ~s ~s)" struct-name symbol name type))
+    (values symbol name type)))
 
-(struct topics (list hash)
+(struct topics (hash all threads tags)
   #:transparent
   #:guard
-  (λ (list hash name)
-    (unless (and (list? list) (hash? hash))
-      (error 'topic "not a valid topics: (~a ~s ~s)" name list hash))
-    (values list hash)))
+  (λ (hash all threads tags name)
+    (unless (and (hash? hash) (list? all) (list? threads) (list? tags))
+      (error 'topic "not a valid topics: (~a ~s ~s ~s ~s)" name hash all threads tags))
+    (values hash all threads tags)))
 
 (struct tagged (day id)
   #:transparent
   #:guard
   (λ (day id name)
-    (unless (and (day? day) (valid-id? id))
+    (unless (and (day? day) (valid-topic-symbol? id))
       (error 'topic "not a valid tagged: (~a ~s ~s)" name day id))
     (values day id)))
 

@@ -2,6 +2,7 @@
 (require racket/match
          racket/list
          racket/string
+         racket/format
          db
          "day.rkt"
          "post.rkt")
@@ -14,33 +15,40 @@
          get-posts
          create-topic
          update-topic
-         get-topic)
+         get-topic
+         all-topics
+         tag
+         untag)
 
-(struct repo (connection topics)
-  #:mutable)
+(struct repo (connection topics) #:mutable)
 
 (define (open-repo path)
-  (define c (sqlite3-connect
-             #:database path
-             #:mode 'create))
-
-  (query-exec c (string-append "CREATE TABLE IF NOT EXISTS topic(\n"
-                               "  id TEXT PRIMARY KEY,\n"
-                               "  name TEXT\n"
-                               ")"))
-  (query-exec c (string-append "CREATE TABLE IF NOT EXISTS post(\n"
-                               "  day TEXT PRIMARY KEY,\n"
-                               "  text TEXT,\n"
-                               "  id INTEGER,\n"
-                               "  link TEXT,\n"
-                               "  FOREIGN KEY(id) REFERENCES topic(id)"
-                               ")"))
-  (query-exec c (string-append "CREATE TABLE IF NOT EXISTS tagged(\n"
-                               "  day TEXT,\n"
-                               "  id TEXT\n,"
-                               "  FOREIGN KEY(day) REFERENCES post(day),\n"
-                               "  FOREIGN KEY(id) REFERENCES topic(id)"
-                               ")"))
+  (define c (sqlite3-connect #:database path #:mode 'create))
+  (query-exec c (~a "CREATE TABLE IF NOT EXISTS topic("
+                    "  symbol TEXT PRIMARY KEY,"
+                    "  name TEXT,"
+                    "  type INTEGER" 
+                    ")"
+                    #:separator "\n"))
+  (query-exec c (~a "CREATE TABLE IF NOT EXISTS post("
+                    "  day TEXT PRIMARY KEY,"
+                    "  text TEXT,"
+                    "  symbol INTEGER,"
+                    "  link TEXT,"
+                    "  FOREIGN KEY(symbol) REFERENCES topic(symbol)"
+                    ")"
+                    #:separator "\n"))
+  (query-exec c "CREATE INDEX IF NOT EXISTS post_symbol ON post(symbol)")
+  (query-exec c (~a "CREATE TABLE IF NOT EXISTS tagged("
+                    "  day TEXT,"
+                    "  symbol TEXT,"
+                    "  FOREIGN KEY(day) REFERENCES post(day),"
+                    "  FOREIGN KEY(symbol) REFERENCES topic(symbol),"
+                    "  UNIQUE(day, symbol) ON CONFLICT IGNORE"
+                    ")"
+                    #:separator "\n"))
+  (query-exec c (~a "CREATE INDEX IF NOT EXISTS tagged_day ON tagged(day)"))
+  (query-exec c (~a "CREATE INDEX IF NOT EXISTS tagged_symbol ON tagged(symbol)"))  
   (repo c #f))
 
 (define (close-repo rp)
@@ -57,21 +65,21 @@
 
 (define (create-post rp pst)
   (match pst
-    [(post day text id link)
+    [(post day text symbol link)
      (query-exec (con rp)
-                 "INSERT INTO post (day, text, id, link) VALUES ($1, $2, $3, $4)"
+                 "INSERT INTO post (day, text, symbol, link) VALUES ($1, $2, $3, $4)"
                  (day->string day)
                  text
-                 (false->sql-null (and id (symbol->string id)))
+                 (false->sql-null (and symbol (symbol->string symbol)))
                  (false->sql-null link))]))
 
 (define (update-post rp pst)
   (match pst
-    [(post day text id link)
+    [(post day text symbol link)
      (query-exec (con rp)
-                 "UPDATE post SET text = $1, id = $2, link = $3 WHERE day = $4"
+                 "UPDATE post SET text = $1, symbol = $2, link = $3 WHERE day = $4"
                  text
-                 (false->sql-null (and id (symbol->string id)))
+                 (false->sql-null (and symbol (symbol->string symbol)))
                  (false->sql-null link)
                  (day->string day))]))
 
@@ -86,7 +94,7 @@
 
 (define (get-post rp day)
   (define rows (query-rows (con rp)
-                           "SELECT day, text, id, link FROM post WHERE day = $1"
+                           "SELECT day, text, symbol, link FROM post WHERE day = $1"
                            (day->string day)))
   (match rows
     ['() #f]
@@ -103,7 +111,7 @@
       (match filter
         [(before d) (list (format "day < $~a" n) (day->string d))]
         [(after d) (list (format "day > $~a" n) (day->string d))]
-        [(in-thread d) (list (format "id = $~a" n) (symbol->string d))])))
+        [(in-thread symbol) (list (format "symbol = $~a" n) (symbol->string symbol))])))
   (define where
     (if (empty? clauses)
         ""
@@ -112,50 +120,91 @@
   (define rows
     (apply query-rows
            (con rp)
-           (format "SELECT day, text, id, link FROM post~a ORDER BY day ~a" where order)
+           (format "SELECT day, text, symbol, link FROM post~a ORDER BY day ~a" where order)
            values))
   (map row->post rows))
+
+(define (type->int type)
+  (match type
+    ['neither 0]
+    ['thread 1]
+    ['tag 2]
+    ['either 3]))
+(define (int->type type)
+  (match type
+    [0 'neither]
+    [1 'thread]
+    [2 'tag]
+    [3 'either]))
 
 (define (create-topic rp tp)
   (set-repo-topics! rp #f)
   (match tp
-    [(topic id name)
+    [(topic symbol name type)
      (query-exec (con rp)
-                 "INSERT INTO topic (id, name) VALUES ($1, $2)"
-                 (symbol->string id)
-                 name)]))
+                 "INSERT INTO topic (symbol, name, type) VALUES ($1, $2, $3)"
+                 (symbol->string symbol)
+                 name
+                 (type->int type))]))
 
 (define (update-topic rp tp)
   (set-repo-topics! rp #f)
   (match tp
-    [(topic id name)
-     (query-exec (con rp) "UPDATE topic SET name = $1 WHERE id = $2" name (symbol->string id))]))
+    [(topic symbol name type)
+     (query-exec (con rp)
+                 "UPDATE topic SET name = $1, type = $2 WHERE symbol = $3"
+                 name
+                 (type->int type)
+                 (symbol->string symbol))]))
 
 (define (row->topic row)
   (match row
-    [(vector id name) (topic (string->symbol id) name)]))
+    [(vector id name type) (topic (string->symbol id) name (int->type type))]))
 
 (define (all-topics rp)
   (unless (repo-topics rp)
-    (define list (map row->topic
-                        (query-rows (con rp) "SELECT id, name FROM topic ORDER BY name, id")))
+    (define all (map row->topic
+                     (query-rows (con rp)
+                                 "SELECT symbol, name, type FROM topic ORDER BY name, symbol")))
+    (define ((has-type? type) tp)
+      (match tp
+        [(topic _ _ 'either) #t]
+        [(topic _ _ symbol) (eq? symbol type)]))
     (set-repo-topics! rp
-                      (topics list
-                              (make-immutable-hasheq (map (λ (t) (cons (topic-id t) t)) list)))))
+                      (topics (make-immutable-hasheq (map (λ (t) (cons (topic-symbol t) t)) all))
+                              all
+                              (filter (has-type? 'thread) all)
+                              (filter (has-type? 'tag) all))))
   (repo-topics rp))
 
 (define (get-topic rp id)
   (hash-ref (topics-hash (all-topics rp)) id))
 
+(define (tag rp p tp)
+  (match* (p tp)
+    [((post dy _ _ _) (topic sym _ _))
+     (query-exec (con rp)
+                 "INSERT INTO tagged (day, symbol) VALUES ($1, $1)"
+                 (day->string dy)
+                 (symbol->string sym))]))
+
+(define (untag rp p tp)
+  (match* (p tp)
+    [((post dy _ _ _) (topic sym _ _))
+     (query-exec (con rp)
+                 "DELETE frOM tagged WHERE day = $1 AND symbol = $1"
+                 (day->string dy)
+                 (symbol->string sym))]))
+
 (module+ test
   (require (except-in rackunit before after))
   (define r (open-repo 'memory))
   
-  (create-topic r (topic 'hello "Hello"))
-  (check-equal? (get-topic r 'hello) (topic 'hello "Hello"))
-  (check-exn exn:fail:sql? (λ () (create-topic r (topic 'hello "Hi"))))
-  (update-topic r (topic 'hello "Hi"))
-  (check-equal? (get-topic r 'hello) (topic 'hello "Hi"))
+  (create-topic r (topic 'hello "Hello" 'either))
+  (check-exn exn:fail:sql? (λ () (create-topic r (topic 'hello "Hi" 'either))))
+  (check-equal? (get-topic r 'hello) (topic 'hello "Hello" 'either))
+  (update-topic r (topic 'hello "Hi" 'thread))
+  (check-equal? (get-topic r 'hello) (topic 'hello "Hi" 'thread))
   (define d1 (day 2026 01 01))
   (define d2 (day 2026 02 01))
   (define p1 (post d1 "beep" 'hello #f))

@@ -11,34 +11,30 @@
          "post.rkt"
          "repo.rkt"
          "html.rkt"
-         "down.rkt")
+         "down.rkt"
+         "site.rkt")
 
 (define css (file->string "./style.css"))
 
 (define the-day (today))
 (define r (open-repo 'memory))
-(define t (topic 'welp "Welperson"))
+(define t (topic 'important-topic "An important topic" 'thread))
 (create-topic r t)
-(create-post r (post (add-days the-day -5) "blah bla\nbla\n\nblep" 'welp "https://garoof.no"))
-(create-post r (post (add-days the-day -3) "beep\nboop\nbap" #f "https://garoof.no"))
-(create-post r (post (add-days the-day -1) "okay" #f #f))
+(create-post r (post (add-days the-day -10)
+                     "lorem ipswitch\nbla _bli_ `blablah`\n\nboop."
+                     'important-topic
+                     "https://dailyotter.org"))
+(create-post r (post (add-days the-day -5) "beep\nboop\nbap" #f "https://dailybunny.org"))
+(create-post r (post (add-days the-day -3) "blep\nblop\nblap" 'important-topic #f))
+(create-post r (post (add-days the-day -1) "mlep\nmlop\nmlap" #f #f))
 
-(define (out-html htmlx)
+(define (out-html html)
   (λ (out)
     (write-string doctype out)
-    (write-html htmlx out)))
+    (write-html html out)))
 
 (define (ok title body)
   (response/output (out-html (page title body))))
-
-(define (page title body)
-  `(html
-    ([lang "en"])
-    (head
-     (meta ([charset "utf-8"]))
-     (title ,title)
-     (link ([href "/style.css"] [rel "stylesheet"])))
-    ,body))
 
 (define (not-found)
   (define htmlx (page "404 Not Found :(" '(body (h1 "Not found :("))))
@@ -57,82 +53,18 @@
 (define mdr #px"^(\\d\\d)-(\\d\\d)$")
 (define yr #px"^(\\d\\d\\d\\d)$")
 
-(define (pad n w)
-  (~a n #:min-width w #:align 'right #:pad-string "0"))
-(define (day->link dy)
-  (match dy
-    [(day y m d) (format "/~a/~a/~a" (pad y 4) (pad m 2) (pad d 2))]))
-
-(define (link-tr link)
-  (if link
-      `((tr (th "Links to:") (td (a ([href ,link]) ,link))))
-      '()))
-
-(define (thread-tr tp)
-  (match tp
-    [(topic id name)
-     (define id-str (symbol->string id))
-     `((tr (th "In thread:")
-            (td (a ([href ,(format "/topic/~a" id-str)]) ,name))))]
-    [#f '()]))
-
-(define (html-section day text rows)
-  (define str (day->string day))
-  `(section
-    ([id ,str])
-    (h2 (a ([href ,(day->link day)]) ,str))
-    ,@(parsedown text)
-    ,@(if (empty? rows)
-          '()
-          `((footer (table ,@rows))))))
-
-(define (post->section-in-thread p)
-  (match p
-    [(post day text _ link) (html-section day text (link-tr link))]))
-
-(define (post->section-no-thread p)
-  (match p
-    [(post day text id link)
-     (html-section day text `(,@(thread-tr (and id (get-topic r id))) ,@(link-tr link)))]))
-
 (define (lfstring str)
   (regexp-replace* #px"\r\n?" str "\n"))
 
-(define (servlet req)
-  (define bindings (request-bindings req))
-  (match* ((request-method req) (map path/param-path (url-path (request-uri req))))
-    [(#"GET" (or '("") '("index.html")))
-     (match-define (day y m d) the-day)
-     (define (pad v n)
-       (~a v #:width n #:align 'right #:left-pad-string "0"))
-     (define posts (get-posts r 'desc (before the-day)))
-     (ok "miniblag"
-         `(body
-           (h1 "an miniature weblog")
-           (p "today really is " ,(day->string the-day))
-           (form ([action "next-day"] [method "post"])
-                 (input ([type "submit"] [value "Next day plox"])))
-           (form
-            ([action ,(format "~a/~a-~a/post" (pad y 4) (pad m 2) (pad d 2))] [method "post"])
-            (label "Text: " (textarea ([name "text"])))
-            (label "Optionally a link: " (input ([name "link"])))
-            (input ([type "submit"] [value "Submit"])))
-           (p "posts:")
-           ,@(map post->section-no-thread posts)))]
-    [(#"GET" (list (regexp #px"\\d+" `(,y)) (regexp #px"\\d+" `(,m)) (regexp #px"\\d+" `(,d))))
-     (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-     (printf "~a" dy)
-     (define p (and dy (get-post r dy)))
-     (if p
-         (ok (day->string dy) `(body ,(post->section-in-thread p)))
-         (not-found))]
-    [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "post"))
-     (match bindings
+(define (strings->maybe-day y m d)
+  (maybe-day (string->number y) (string->number m) (string->number d)))
+
+(define (store-post dy bindings store)
+  (match bindings
        [`((text . ,crlftext) (link . ,linktext))
         (define trimmed (string-trim linktext))
         (define link (and (non-empty-string? trimmed) trimmed))
         (define text (lfstring crlftext))
-        (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
         (cond [(not dy) (not-found)]
               [(not (valid-text? text))
                (match-define (list ok too-much) (valid-text-split text))
@@ -140,8 +72,7 @@
                       (h1 "text too long >:(")
                       (p "okay: " ,(~s ok))
                       (p "too much: " ,(~s too-much))))]
-              [(get-post r dy) (bad `(body (h1 "there's already a post for" (day->string dy))))]
-              [else (create-post r (post dy text #f link))
+              [else (store r (post dy text #f link))
                     (ok "success :)"
                         `(body
                           (h1 "nice :)")
@@ -150,7 +81,48 @@
        [_ (bad `(body
                  (h1 "bad parameters")
                  (p (~s bindings) " <- what is ??")
-                 (p "want: param text then param link")))])]
+                 (p "want: param text then param link")))]))
+
+(define (servlet req)
+  (define bindings (request-bindings req))
+  (match* ((request-method req) (map path/param-path (url-path (request-uri req))))
+    [(#"GET" (or '("") '("index.html")))
+     (define (pad v n)
+       (~a v #:width n #:align 'right #:left-pad-string "0"))
+     (define posts (get-posts r 'desc (before the-day)))
+     (ok "miniblag"
+         `(body
+           (h1 "Miniature weblog")
+           (p "Today really is " ,(day->string the-day))
+           (form ([action "next-day"] [method "post"])
+                 (input ([type "submit"] [value "Next day plox"])))
+           ,(day/post->form the-day (get-post r the-day))
+           (p "posts:")
+           ,@(map (λ (p) (post->section-no-thread p (all-topics r))) posts)))]
+    [(#"GET" (list (regexp #px"\\d+" `(,y)) (regexp #px"\\d+" `(,m)) (regexp #px"\\d+" `(,d))))
+     (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
+     (define p (and dy (get-post r dy)))
+     (if p
+         (ok (day->string dy) `(body ,(post->section-in-thread p)))
+         (not-found))]
+    [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "create"))
+     (define dy (strings->maybe-day y m d))
+     (if (get-post r dy)
+         (bad `(body (h1 "there's already a post for " (day->string dy))))
+         (store-post dy bindings create-post))]
+    [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "edit"))
+     (define dy (strings->maybe-day y m d))
+     (if (get-post r dy)
+         (store-post dy bindings update-post)
+         (bad `(body (h1 "there's no post for " (day->string dy) " to edit. hmm!"))))]
+    [(#"GET" (list "topics" str))
+     (match (get-topic r (string->symbol str))
+       [#f (not-found)]
+       [(topic symbol name type)
+        (ok name
+            `(body
+              (h1 ,name)
+              ,@(map (λ (p) (post->section-in-thread p)) (get-posts r 'asc (in-thread symbol)))))])]
     [(#"POST" (list "next-day"))
      (set! the-day (add-days the-day 1))
      (sea-otter "/index.html")]
