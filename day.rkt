@@ -78,7 +78,7 @@
 
 (define (day->string dy)
   (match dy
-    [(day y m d) (format "~a-~a-~a" (4pad y) (2pad m) (4pad d))]))
+    [(day y m d) (format "~a-~a-~a" (4pad y) (2pad m) (2pad d))]))
 
 (define (maybe-day->string d)
   (and (day? d) (day->string d)))

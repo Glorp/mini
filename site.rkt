@@ -8,7 +8,7 @@
 (provide page
          day->url
          day/post->form
-         post->section-no-thread
+         post->section
          post->section-in-thread)
 
 (define (post-inputs text link)
@@ -42,11 +42,6 @@
      (define id-str (symbol->string symbol))
      `(a ([href ,(format "/topics/~a" id-str)]) ,name)]))
 
-(define (thread-tr tp)
-  (if tp
-      `((tr (th "In thread:") (td ,(thread-link tp))))
-      '()))
-
 (define (tag-link tp)
   (match tp
     [(topic symbol name _)
@@ -60,11 +55,10 @@
      `((tr (th "Tagged:")
            (td ,(tag-link tp) ,@(apply append (map (λ (t) `(", " ,(tag-link t))) rest)))))]))
 
-(define (html-section day text rows)
-  (define str (day->string day))
+(define (html-section id h text rows)
   `(section
-    ([id ,str])
-    (h3 (a ([href ,(day->url day)]) ,str))
+    ([id ,id])
+    ,h
     ,@(parsedown text)
     ,@(if (empty? rows)
           '()
@@ -73,15 +67,23 @@
 (define (post->section-in-thread p tags)
   (match p
     [(post day text _ link)
-     (html-section day text `(,@(tags-tr (hash-ref tags day '())) ,@(link-tr link)))]))
+     (html-section (day->string day)
+                   `(h3 (time ,(day->string day)))
+                   text
+                   `(,@(link-tr link) ,@(tags-tr (hash-ref tags day '()))))]))
 
-(define (post->section-no-thread p topics tags)
+(define (post->section p topics tags)
   (match p
     [(post day text symbol link)
      (define topic (and symbol (hash-ref (topics-hash topics) symbol)))
-     (html-section day
+     (html-section (day->string day)
+                   `(h3 (a ([href ,(day->url day)])
+                           (time ,(day->string day))
+                           ,@(if topic
+                                 `(" (" ,(topic-name topic) , ")")
+                                 '())))
                    text
-                   `(,@(thread-tr topic) ,@(tags-tr (hash-ref tags day '())) ,@(link-tr link)))]))
+                   `(,@(link-tr link) ,@(tags-tr (hash-ref tags day '()))))]))
 
 (define (page title body)
   `(html

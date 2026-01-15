@@ -119,7 +119,7 @@
            (form ([action "next-day"] [method "post"])
                  (input ([type "submit"] [value "Next day plox"])))
            (p "Posts:")
-           ,@(map (λ (p) (post->section-no-thread p (all-topics r)  tags)) posts)))]
+           ,@(map (λ (p) (post->section p (all-topics r)  tags)) posts)))]
     [(#"GET" (list (regexp yr (list _ y)) (regexp mdr (list _ m d))))
      (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
      (define p (and dy (get-post r dy)))
@@ -138,7 +138,7 @@
               (h1 ,dstr)
               ,@(if p
                    `((p "Existing post:")
-                     ,(post->section-no-thread p (all-topics r) (tags-hash r dy)))
+                     ,(post->section p (all-topics r) (tags-hash r dy)))
                    `((p "There's no existing post for " ,dstr ".")))
               ,(day/post->form dy p)))])]
     [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "create"))
@@ -161,7 +161,7 @@
         (define tags-html
           (match tags
             ['() '()]
-            [_ `((h2 "Posts tagged " ,(symbol->string symbol) ":")
+            [_ `((h2 "Posts with the \"" ,(symbol->string symbol) "\"-tag:")
                  (table
                   ,@(apply append
                            (map (λ (p)
@@ -173,7 +173,7 @@
                                      (define str (if (> (string-length start) 64)
                                                      (substring start 0 61)
                                                      start))
-                                     `((tr (th (a ([href ,(day->url dy)]) ,(day->string dy)))
+                                     `((tr (th (a ([href ,(day->url dy)]) (time ,(day->string dy))))
                                            (td ,@(parseline str))))]))
                                 tagged-posts))))]))
         (define thread-html
