@@ -139,12 +139,12 @@
               ,@(if p
                    `((p "Existing post:")
                      ,(post->section p (all-topics r) (tags-hash r dy)))
-                   `((p "There's no existing post for " ,dstr ".")))
+                   `((p "There's no existing post for " (time ,dstr) ".")))
               ,(day/post->form dy p)))])]
     [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "create"))
      (define dy (strings->maybe-day y m d))
      (if (get-post r dy)
-         (bad `(body (h1 "there's already a post for " ,(day->string dy))))
+         (bad `(body (h1 "there's already a post for " (time ,(day->string dy)))))
          (store-post dy bindings create-post))]
     [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "update"))
      (define dy (strings->maybe-day y m d))
