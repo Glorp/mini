@@ -16,12 +16,9 @@
     (label "Optionally a link: " (input ([name "link"] [type "text"] [value ,(or link "")])))
     (input ([type "submit"] [value "Submit"]))))
 
-(define (pad n w)
-  (~a n #:min-width w #:align 'right #:pad-string "0"))
-
 (define (day->url dy)
   (match dy
-    [(day y m d) (format "/~a/~a-~a" (pad y 4) (pad m 2) (pad d 2))]))
+    [(day y m d) (format "/~a/~a-~a" (4pad y) (2pad m) (2pad d))]))
 
 (define (day->form dy)
   `(form

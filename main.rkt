@@ -110,10 +110,7 @@
          (sea-otter "/index.html")
          unauthorized)]
     [(#"GET" (or '("") '("index.html")))
-     (define (pad v n)
-       (~a v #:width n #:align 'right #:left-pad-string "0"))
      (define posts (get-posts r 'desc (before the-day)))
-     
      (define tags (apply tags-hash r (map post-day posts)))
      (ok "Miniature weblog"
          `(body
@@ -123,6 +120,13 @@
                  (input ([type "submit"] [value "Next day plox"])))
            (p "Posts:")
            ,@(map (λ (p) (post->section-no-thread p (all-topics r)  tags)) posts)))]
+    [(#"GET" (list (regexp yr (list _ y)) (regexp mdr (list _ m d))))
+     (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
+     (define p (and dy (get-post r dy)))
+     (define symbol (and p (post-symbol p)))
+     (cond [symbol (sea-otter (format "/topics/~a#~a" symbol (day->string dy)))]
+           [p (ok (day->string dy) `(body ,(post->section-in-thread p (tags-hash r dy))))]
+           [else (not-found)])]
     [(#"GET" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "edit"))
      (match (maybe-day (string->number y) (string->number m) (string->number d))
        [#f (not-found)]
@@ -137,12 +141,6 @@
                      ,(post->section-no-thread p (all-topics r) (tags-hash r dy)))
                    `((p "There's no existing post for " ,dstr ".")))
               ,(day/post->form dy p)))])]
-    [(#"GET" (list (regexp yr (list _ y)) (regexp mdr (list _ m d))))
-     (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-     (define p (and dy (get-post r dy)))
-     (if p
-         (ok (day->string dy) `(body ,(post->section-in-thread p (tags-hash r dy))))
-         (not-found))]
     [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "create"))
      (define dy (strings->maybe-day y m d))
      (if (get-post r dy)

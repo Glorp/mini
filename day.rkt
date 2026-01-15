@@ -10,7 +10,14 @@
          maybe-day->string
          string->day
          string->maybe-day
-         add-days)
+         add-days
+         2pad
+         4pad)
+
+(define (2pad n)
+  (~a n #:width 2 #:align 'right #:pad-string "0"))
+(define (4pad n)
+  (~a n #:width 4 #:align 'right #:pad-string "0"))
 
 (define (leap-year? y)
   (and (zero? (remainder y 4))
@@ -69,13 +76,9 @@
 (define (maybe-day y m d)
   (and (valid? y m d) (day y m d)))
 
-(define (day->string d)
-  (define (pad v n)
-    (~a v #:width n #:align 'right #:left-pad-string "0"))
-  (format "~a-~a-~a"
-          (pad (day-y d) 4)
-          (pad (day-m d) 2)
-          (pad (day-d d) 2)))
+(define (day->string dy)
+  (match dy
+    [(day y m d) (format "~a-~a-~a" (4pad y) (2pad m) (4pad d))]))
 
 (define (maybe-day->string d)
   (and (day? d) (day->string d)))
