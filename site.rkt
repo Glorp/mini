@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
          racket/list
+         racket/set
          racket/format
          "day.rkt"
          "post.rkt"
@@ -9,7 +10,9 @@
          day->url
          day/post->form
          post->section
-         post->section-in-thread)
+         post->section-in-thread
+         post->tr
+         tag-forms)
 
 (define (post-inputs text link)
   `((label "Text: " (textarea ([name "text"]) ,text))
@@ -31,8 +34,7 @@
   (if p
       `(form
         ([action ,(~a (day->url dy) "/update")] [method "post"])
-        "Edit existing post:"
-        (br)
+        (p "Edit existing post:")
         ,@(post-inputs (post-text p) (post-link p)))
       (day->form dy)))
 
@@ -47,6 +49,18 @@
     [(topic symbol name _)
      (define id-str (symbol->string symbol))
      `(a ([href ,(format "/topics/~a" id-str)]) ,(symbol->string symbol))]))
+
+(define (post->tr p)
+  (match p
+    [(post dy text _ _)
+     (define start (match (regexp-match #px"[^\n]+" text)
+                     [#f ""]
+                     [(list s) s]))
+     (define str (if (> (string-length start) 64)
+                     (substring start 0 61)
+                     start))
+     `((tr (th (a ([href ,(day->url dy)]) (time ,(day->string dy))))
+           (td ,@(parseline str))))]))
 
 (define (tags-tr tps)
   (match tps
@@ -84,6 +98,32 @@
                                  '())))
                    text
                    `(,@(link-tr link) ,@(tags-tr (hash-ref tags day '()))))]))
+
+(define (tag-forms dy topics tags)
+  (define tagset (apply set (map topic-symbol (hash-ref tags dy '()))))
+  (define (halp l adds removes)
+    (match l
+      ['() (list (reverse adds) (reverse removes))]
+      [(list (topic symbol _ _) rest ...) (if (set-member? tagset symbol)
+                                              (halp rest adds (cons symbol removes))
+                                              (halp rest (cons symbol adds) removes))]))
+  (match (halp (topics-tags topics) '() '())
+    [(list adds removes)
+     (define url (day->url dy))
+     `((form ([method "post"] [action ,(~a url "/tag")])
+             (p "Add a tag:")
+             ,@(map (λ (tag)
+                      `(input ([type "submit"]
+                               [name ,(symbol->string tag)]
+                               [value ,(symbol->string tag)])))
+                    adds))
+       (form ([method "post"] [action ,(~a url "/untag")])
+             (p "Remove a tag:")
+             ,@(map (λ (tag)
+                      `(input ([type "submit"]
+                               [name ,(symbol->string tag)]
+                               [value ,(symbol->string tag)])))
+                    removes)))]))
 
 (define (page title body)
   `(html

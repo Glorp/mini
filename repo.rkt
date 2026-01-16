@@ -195,7 +195,7 @@
   (match* (p tp)
     [((post dy _ _ _) (topic sym _ _))
      (query-exec (con rp)
-                 "DELETE frOM tagged WHERE day = $1 AND symbol = $1"
+                 "DELETE FROM tagged WHERE day = $1 AND symbol = $2"
                  (day->string dy)
                  (symbol->string sym))]))
 

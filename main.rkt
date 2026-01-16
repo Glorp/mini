@@ -46,9 +46,9 @@
 (define (ok title body)
   (response/output (out-html (page title body))))
 
-(define (not-found)
-  (define htmlx (page "404 Not Found :(" '(body (h1 "Not found :("))))
-  (response 404 #"Not Found" (current-seconds) TEXT/HTML-MIME-TYPE '() (out-html htmlx)))
+(define not-found
+  (let ([htmlx (page "404 Not Found :(" '(body (h1 "Not found :(")))])
+    (response 404 #"Not Found" (current-seconds) TEXT/HTML-MIME-TYPE '() (out-html htmlx))))
 
 (define (sea-otter path)
   (define headers (list (header #"location" (string->bytes/utf-8 path))))
@@ -88,7 +88,7 @@
      (define trimmed (string-trim linktext))
      (define link (and (non-empty-string? trimmed) trimmed))
      (define text (lfstring crlftext))
-     (cond [(not dy) (not-found)]
+     (cond [(not dy) not-found]
            [(not (valid-text? text))
             (match-define (list ok too-much) (valid-text-split text))
             (bad `(body
@@ -101,6 +101,55 @@
               (h1 "bad parameters")
               (p (~s bindings) " <- what is ??")
               (p "want: param text then param link")))]))
+
+(define (day-handler method dy rest bindings)
+  (define dstr (day->string dy))
+  (define p (and dy (get-post r dy)))
+  (match* (method rest)
+    [(#"GET" '())
+     (define symbol (and p (post-symbol p)))
+     (cond [symbol (sea-otter (format "/topics/~a#~a" symbol dstr))]
+           [p (ok (day->string dy) `(body ,(post->section-in-thread p (tags-hash r dy))))]
+           [else not-found])]
+    [(#"GET" '("edit"))
+     (ok dstr
+         `(body
+           (h1 ,dstr)
+           ,@(cond [p (define topics (all-topics r))
+                      (define tags (tags-hash r dy))
+                      `((p "Existing post:")
+                        ,(post->section p topics tags)
+                        ,@(tag-forms dy topics tags))]
+                   [else `((p "There's no existing post for " (time ,dstr) "."))])
+              ,(day/post->form dy p)))]
+    [(#"POST" '("create"))
+     (if (get-post r dy)
+         (bad `(body (h1 "there's already a post for " (time ,dstr))))
+         (store-post dy bindings create-post))]
+    [(#"POST" '("update"))
+     (if (get-post r dy)
+         (store-post dy bindings update-post)
+         (bad `(body (h1 "there's no post for " ,dstr " to edit. hmm!"))))]
+    [(#"POST" '("update"))
+     (if (get-post r dy)
+         (store-post dy bindings update-post)
+         (bad `(body (h1 "there's no post for " ,dstr " to edit. hmm!"))))]
+    [(#"POST" '("tag")) (tag-handler dy bindings tag)]
+    [(#"POST" '("untag")) (tag-handler dy bindings untag)]
+    [(method path)
+     (printf "not found: ~a ~a, ~a, ~s~n" dy method path bindings)
+     not-found]))
+
+(define (tag-handler dy bindings tag/untag)
+  (match (get-post r dy)
+    [#f (bad `(body (h1 "there's no post for " ,(day->string dy) " to tag. hmm!")))]
+    [p (match bindings
+         [(list (cons symbol _))
+          (match (hash-ref (topics-hash (all-topics r)) symbol #f)
+            [#f (bad `(body (h1 "bad params. hmm!")))]
+            [tp (tag/untag r p tp)
+                (sea-otter (~a (day->url dy) "/edit"))])]
+         [_ (bad `(body (h1 "bad params. hmm!")))])]))
 
 (define (servlet req)
   (define bindings (request-bindings req))
@@ -120,40 +169,14 @@
                  (input ([type "submit"] [value "Next day plox"])))
            (p "Posts:")
            ,@(map (λ (p) (post->section p (all-topics r)  tags)) posts)))]
-    [(#"GET" (list (regexp yr (list _ y)) (regexp mdr (list _ m d))))
+    [(method (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) rest ...))
      (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-     (define p (and dy (get-post r dy)))
-     (define symbol (and p (post-symbol p)))
-     (cond [symbol (sea-otter (format "/topics/~a#~a" symbol (day->string dy)))]
-           [p (ok (day->string dy) `(body ,(post->section-in-thread p (tags-hash r dy))))]
-           [else (not-found)])]
-    [(#"GET" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "edit"))
-     (match (maybe-day (string->number y) (string->number m) (string->number d))
-       [#f (not-found)]
-       [dy
-        (define dstr (day->string dy))
-        (define p (get-post r dy))
-        (ok dstr
-            `(body
-              (h1 ,dstr)
-              ,@(if p
-                   `((p "Existing post:")
-                     ,(post->section p (all-topics r) (tags-hash r dy)))
-                   `((p "There's no existing post for " (time ,dstr) ".")))
-              ,(day/post->form dy p)))])]
-    [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "create"))
-     (define dy (strings->maybe-day y m d))
-     (if (get-post r dy)
-         (bad `(body (h1 "there's already a post for " (time ,(day->string dy)))))
-         (store-post dy bindings create-post))]
-    [(#"POST" (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) "update"))
-     (define dy (strings->maybe-day y m d))
-     (if (get-post r dy)
-         (store-post dy bindings update-post)
-         (bad `(body (h1 "there's no post for " ,(day->string dy) " to edit. hmm!"))))]
+     (if dy
+         (day-handler method dy rest bindings)
+         not-found)]
     [(#"GET" (list "topics" str))
      (match (get-topic r (string->symbol str))
-       [#f (not-found)]
+       [#f not-found]
        [(topic symbol name type)
         (define tagged-posts (get-posts r 'asc (with-tag symbol)))
         (define thread-posts (get-posts r 'asc (in-thread symbol)))
@@ -162,28 +185,14 @@
           (match tags
             ['() '()]
             [_ `((h2 "Posts with the \"" ,(symbol->string symbol) "\"-tag:")
-                 (table
-                  ,@(apply append
-                           (map (λ (p)
-                                  (match p
-                                    [(post dy text _ _)
-                                     (define start (match (regexp-match #px"[^\n]+" text)
-                                                     [#f ""]
-                                                     [(list s) s]))
-                                     (define str (if (> (string-length start) 64)
-                                                     (substring start 0 61)
-                                                     start))
-                                     `((tr (th (a ([href ,(day->url dy)]) (time ,(day->string dy))))
-                                           (td ,@(parseline str))))]))
-                                tagged-posts))))]))
+                 (table ,@(apply append (map post->tr tagged-posts))))]))
         (define thread-html
           (match thread-posts
             ['() '()]
             [_ `((h2 "Thread:") ,@(map (λ (p) (post->section-in-thread p tags)) thread-posts))]))
-        (printf "th: ~s~ntg:~s~n" thread-html tags-html)
         (ok name
             `(body
-              (h1 ,name) ,@thread-html ,@tags-html))])]
+              (h1 ,name) ,@tags-html ,@thread-html))])]
     [(#"POST" (list "next-day"))
      (set! the-day (add-days the-day 1))
      (sea-otter "/index.html")]
@@ -191,7 +200,7 @@
      (response/output (λ (out) (write-string css out)) #:mime-type #"text/css; charset=utf-8")]
     [(method path)
      (printf "not found: ~a, ~a, ~s~n" method path bindings)
-     (not-found)]))
+     not-found]))
 
 (serve/servlet
  servlet
