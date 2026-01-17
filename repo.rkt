@@ -181,7 +181,7 @@
   (repo-topics rp))
 
 (define (get-topic rp id)
-  (hash-ref (topics-hash (all-topics rp)) id))
+  (hash-ref (topics-hash (all-topics rp)) id #f))
 
 (define (tag rp p tp)
   (match* (p tp)

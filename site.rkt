@@ -8,6 +8,8 @@
          "down.rkt")
 (provide page
          day->url
+         symbol->url
+         topic->url
          day/post->form
          post->section
          post->section-in-thread
@@ -27,23 +29,30 @@
     (label "Optionally a link: " (input ([name "link"] [type "text"] [value ,(or link "")])))
     (input ([type "submit"] [value "Submit"]))))
 
-(define (day->url dy)
+(define (day->url dy rest)
   (match dy
-    [(day y m d) (format "/~a/~a-~a" (4pad y) (2pad m) (2pad d))]))
+    [(day y m d) (format "/~a/~a-~a~a" (4pad y) (2pad m) (2pad d) rest)]))
+
+(define (symbol->url sym . rest)
+  (format "/topic/~a~a" (symbol->string sym) (apply ~a rest)))
+
+(define (topic->url tp . rest)
+  (match tp
+    [(topic sym _ _) (apply symbol->url sym rest)]))
 
 (define (day->form dy topics)
   `(form
-    ([action ,(~a (day->url dy) "/create")] [method "post"])
+    ([action ,(day->url dy "/create")] [method "post"])
     "Make new post:"
     (br)
     ,@(post-inputs "" #f #f topics)))
 
 (define (day/post->form dy p topics)
   (match p
-    [#f (day->form dy)]
+    [#f (day->form dy topics)]
     [(post dy t sym link)
      `(form
-       ([action ,(~a (day->url dy) "/update")] [method "post"])
+       ([action ,(day->url dy "/update")] [method "post"])
        (p "Edit existing post:")
        ,@(post-inputs t sym link topics))]))
 
@@ -68,7 +77,7 @@
      (define str (if (> (string-length start) 64)
                      (substring start 0 61)
                      start))
-     `((tr (th (a ([href ,(day->url dy)]) (time ,(day->string dy))))
+     `((tr (th (a ([href ,(day->url dy ".html")]) (time ,(day->string dy))))
            (td ,@(parseline str))))]))
 
 (define (tags-tr tps)
@@ -87,26 +96,35 @@
           '()
           `((footer (table ,@rows))))))
 
-(define (post->section-in-thread p tags)
-  (match p
-    [(post day text _ link)
-     (html-section (day->string day)
-                   `(h3 (time ,(day->string day)))
-                   text
-                   `(,@(link-tr link) ,@(tags-tr (hash-ref tags day '()))))]))
+(define (edit-post-tr user dy)
+  (if user
+      `((tr (th (a ([colspan "2"] [href ,(day->url dy "/edit")]) "Edit post"))))
+      '()))
 
-(define (post->section p topics tags)
+(define (post->section-in-thread user p tags)
   (match p
-    [(post day text symbol link)
+    [(post dy text _ link)
+     (html-section (day->string dy)
+                   `(h3 (time ,(day->string dy)))
+                   text
+                   `(,@(link-tr link)
+                     ,@(tags-tr (hash-ref tags dy '()))
+                     ,@(edit-post-tr user dy)))]))
+
+(define (post->section user p topics tags)
+  (match p
+    [(post dy text symbol link)
      (define topic (and symbol (hash-ref (topics-hash topics) symbol)))
-     (html-section (day->string day)
-                   `(h3 (a ([href ,(day->url day)])
-                           (time ,(day->string day))
+     (html-section (day->string dy)
+                   `(h3 (a ([href ,(day->url dy ".html")])
+                           (time ,(day->string dy))
                            ,@(if topic
                                  `(" (" ,(topic-name topic) , ")")
                                  '())))
                    text
-                   `(,@(link-tr link) ,@(tags-tr (hash-ref tags day '()))))]))
+                   `(,@(link-tr link)
+                     ,@(tags-tr (hash-ref tags dy '()))
+                     ,@(edit-post-tr user dy)))]))
 
 (define (tag-forms dy topics tags)
   (define tagset (apply set (map topic-symbol (hash-ref tags dy '()))))
@@ -118,15 +136,14 @@
                                               (halp rest (cons symbol adds) removes))]))
   (match (halp (topics-tags topics) '() '())
     [(list adds removes)
-     (define url (day->url dy))
-     `((form ([method "post"] [action ,(~a url "/tag")])
+     `((form ([method "post"] [action ,(day->url dy "/tag")])
              (p "Add a tag:")
              ,@(map (λ (tag)
                       `(input ([type "submit"]
                                [name ,(symbol->string tag)]
                                [value ,(symbol->string tag)])))
                     adds))
-       (form ([method "post"] [action ,(~a url "/untag")])
+       (form ([method "post"] [action ,(day->url dy "/untag")])
              (p "Remove a tag:")
              ,@(map (λ (tag)
                       `(input ([type "submit"]
@@ -134,14 +151,23 @@
                                [value ,(symbol->string tag)])))
                     removes)))]))
 
-(define (page title body)
+(define nav '(nav (a ([href "/index.html"]) "Index")
+                  ", " (a ([href "/topics.html"]) "Topics")))
+
+(define (header user)
+  `(header ,nav
+           ,@(if user
+                 `((p "You are logged in. Hi, " ,user " :)"))
+                 '())))
+
+(define (page user title content)
   `(html
     ([lang "en"])
     (head
      (meta ([charset "utf-8"]))
      (title ,title)
      (link ([href "/style.css"] [rel "stylesheet"])))
-    ,body))
+    (body ,(header user) ,@content)))
 
 (define (link-tr link)
   (if link
