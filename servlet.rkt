@@ -138,7 +138,7 @@
       [p (match bindings
            [(list (cons sym _))
             (match (hash-ref (topics-hash (all-topics r)) sym #f)
-              [#f (bad user `(body (h1 "bad params. hmm!")))]
+              [#f (bad user `((h1 "bad params. hmm!")))]
               [tp (tag/untag r p tp)
                   (sea-otter (day->url dy "/edit"))])]
            [_ (bad user `((h1 "bad params. hmm!")))])]))
