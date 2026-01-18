@@ -95,15 +95,15 @@
 
 (define (thread-link tp)
   (match tp
-    [(topic symbol name _)
-     (define id-str (symbol->string symbol))
+    [(topic sym name _)
+     (define id-str (symbol->string sym))
      `(a ([href ,(format "/topics/~a" id-str)]) ,name)]))
 
 (define (tag-link tp)
   (match tp
-    [(topic symbol name _)
-     (define id-str (symbol->string symbol))
-     `(a ([href ,(format "/topics/~a" id-str)]) ,(symbol->string symbol))]))
+    [(topic sym name _)
+     (define id-str (symbol->string sym))
+     `(a ([href ,(symbol->url sym ".html")]) ,(symbol->string sym))]))
 
 (define (post->tr p)
   (match p

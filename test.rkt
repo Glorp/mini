@@ -1,34 +1,76 @@
 #lang racket/base
 (require web-server/servlet-env
+         racket/format
          "servlet.rkt"
          "repo.rkt"
          "day.rkt"
          "post.rkt")
 
 (define the-day (today))
-
 (define r (open-repo 'memory))
-(define t (topic 'important-topic "An important topic" 'thread))
-(create-topic r t)
-(create-post r (post (add-days the-day -10)
-                     "lorem ipswitch\nbla _bli_ `blablah`\n\nboop."
-                     'important-topic
-                     "https://dailyotter.org"))
-(define p1 (post (add-days the-day -5) "beep\nboop\nbap" #f "https://dailybunny.org"))
-(define p2 (post (add-days the-day -3) "blep\nblop\nblap" 'important-topic #f))
-(define p3 (post (add-days the-day -2) "mlep\nmlop\nmlap" #f #f))
-(define p4 (post (add-days the-day -1) "BEPP" 'beep #f))
-(create-post r p1)
-(create-post r p2)
-(create-post r p3)
-(create-post r p4)
-(define tag1 (topic 'beep "Beep" 'tag))
-(define tag2 (topic 'boop "Boop" 'tag))
-(create-topic r tag1)
-(create-topic r tag2)
-(tag r p1 tag1)
-(tag r p1 tag2)
-(tag r p2 tag1)
+(define animals (topic 'animals "Animals" 'either) )
+(create-topic r animals)
+(create-post r (post (add-days the-day -7) "Animals are cute" 'animals #f))
+
+(define lagomorphs (topic 'lagomorphs "Lagomorphs " 'tag))
+(create-topic r lagomorphs)
+(define bunnies
+  (post
+   (add-days the-day -6)
+   (~a
+    "Rabbits, or bunnies, are small mammals in the family Leporidae (which also includes the hares), "
+    "which is in the order Lagomorpha (which also includes pikas). They are familiar throughout the "
+    "world as a small herbivore, a prey animal, a domesticated form of livestock, and a pet, having "
+    "a widespread effect on ecologies and cultures.\n\n"
+    "Rabbits have ears.")
+   #f
+   "https://dailybunny.org"))
+(create-post r bunnies)
+(tag r bunnies lagomorphs)
+(tag r bunnies animals)
+
+(define england (topic 'england "England" 'tag))
+(create-topic r england)
+(define ipswitch (post (add-days the-day -5) "lorem ipswitch bla bla bla" #f #f))
+(create-post r ipswitch)
+(tag r ipswitch england)
+
+(create-topic r (topic 'otters "Otters" 'thread))
+
+(define otters
+  (post
+   (add-days the-day -4)
+   (~a
+    "Otters are carnivorous mammals in the subfamily Lutrinae. The 14 extant otter species are all "
+    "semiaquatic, both freshwater and marine. Lutrinae is a branch of the Mustelidae family, which "
+    "includes weasels, badgers, mink, and wolverines, among other animals.")
+   'otters
+   "https://dailyotter.org"))
+(create-post r otters)
+(tag r otters animals)
+
+(create-post
+ r
+ (post
+  (add-days the-day -3)
+  (~a
+   "Otters are distinguished by their long, slim bodies, powerful webbed feet for swimming, and "
+   "their dense fur, which keeps them warm and buoyant in water. They are playful animals, engaging "
+   "in activities like sliding into water on natural slides and playing with stones.")
+  'otters
+  #f))
+
+(create-post r (post (add-days the-day -2) "bla bla blah" #f #f))
+(create-post
+ r
+ (post
+  (add-days the-day -1)
+  (~a
+   "Otters exhibit a varied life cycle with a gestation period of about 60–86 days, and offspring "
+   "typically stay with their family for a year. They can live up to 16 years, with their diet "
+   "mainly consisting of fish and sometimes frogs, birds, or shellfish, depending on the species.")
+  'otters
+  #f))
 
 (serve/servlet (servlet r (λ (user pwd) #t) today)
                #:stateless? #t

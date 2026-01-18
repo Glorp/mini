@@ -164,7 +164,6 @@
                            (a ([href ,(day->url the-day "/edit")]),(day->string the-day))
                            "."))
                       '())
-                (p "Posts:")
                 ,@(map (λ (p) (post->section user p (all-topics r)  tags)) posts)))]
          [(method (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) rest ...))
           (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
