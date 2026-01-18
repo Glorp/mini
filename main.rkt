@@ -82,11 +82,6 @@
     [#f #f]
     [(cons name pwd) (and (equal? pwd #"blapp") (bytes->string/utf-8 name))]))
 
-(define (login name f)
-  (if name
-      (f)
-      unauthorized))
-
 (define (store-post user dy bindings store)
   (match bindings
     [`((text . ,crlftext) (symbol . ,symtext) (link . ,linktext))
@@ -164,91 +159,100 @@
 (define (servlet req)
   (define user (maybe-login req))
   (define bindings (request-bindings req))
-  (match* ((request-method req) (map path/param-path (url-path (request-uri req))))
-    [(#"GET" '("login"))
-     (login user (λ () (sea-otter "/index.html")))]
-    [(#"GET" (or '("") '("index.html")))
-     (define posts (get-posts r 'desc (before the-day)))
-     (define tags (apply tags-hash r (map post-day posts)))
-     (ok user
-         "Miniature weblog"
-         `((h1 "Miniature weblog")
-           (p "Today really is " ,(day->string the-day))
-           (form ([action "next-day"] [method "post"])
-                 (input ([type "submit"] [value "Next day plox"])))
-           (p "Posts:")
-           ,@(map (λ (p) (post->section user p (all-topics r)  tags)) posts)))]
-    [(method (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) rest ...))
-     (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-     (if dy
-         (day-handler user method dy rest bindings)
-         (not-found user))]
-    [(method (list (regexp yr (list _ y)) (regexp mdr-dot-html (list _ m d))))
-     (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-     (if dy
-         (day-handler user method dy '() bindings)
-         (not-found user))]
-    [(#"GET" (list (or "topics" "topics.html")))
-     (define new-topic
-       (if user
-           '((p "Create new topic:")
-             (form ([method "post"] [action "/topics/create"]) 
-              (label "Symbol: " (input ([type "text"] [name "symbol"])))
-              (label "Name: " (input ([type "text"] [name "name"])))
-              (label "Suggested as thread/tag: "
-                     (select ([name "type"])
-                             (option ([value "either"]) "Neither")
-                             (option ([value "thread"]) "Thread")
-                             (option ([value "tag"]) "Tag")
-                             (option ([value "either"]) "Either")))
-              (input ([type "submit"]))
-              ))
-           '()))
-     (ok user
-         "Topics"
-         `((h1 "Topics")
-           ,@new-topic
-           ,@(map (λ (tp)
-                    (match tp
-                      [(topic sym name type)
-                       `(p (a ([href ,(symbol->url sym ".html")]) ,name))]))
-                  (topics-all (all-topics r)))))]
-    [(#"GET" (list "topic" (regexp #px"^(.+?)[.]html$" (list _ str))))
-     (match (get-topic r (string->symbol str))
-       [#f (not-found user)]
-       [(topic symbol name type)
-        (define tagged-posts (get-posts r 'asc (with-tag symbol)))
-        (define thread-posts (get-posts r 'asc (in-thread symbol)))
-        (define tags (apply tags-hash r (map post-day (append thread-posts tagged-posts))))
-        (define tags-html
-          (match tags
-            ['() '()]
-            [_ `((h2 "Posts with the \"" ,(symbol->string symbol) "\"-tag:")
-                 (table ,@(apply append (map post->tr tagged-posts))))]))
-        (define thread-html
-          (match thread-posts
-            ['() '()]
-            [_ `((h2 "Thread:") ,@(map (λ (p) (post->section-in-thread user p tags)) thread-posts))]))
-        (ok user name `((h1 ,name) ,@tags-html ,@thread-html))])]
-    [(#"POST" (list "topics" "create"))
-     (match bindings
-       [`((symbol . ,symstr) (name . ,name) (type . ,typestr))
-        (define sym (string->symbol symstr))
-        (define type (string->symbol typestr))
-        (cond [(get-topic r sym)
-               (bad user '((h1 "Bad Request") (p "Topic " ,symstr " already exists")))]
-              [else
-               (create-topic r (topic sym name type))
-               (sea-otter (symbol->url sym ".html"))])]
-       [_ (bad user '((h1 "Bad Request") (p "bad params :(")))])]
-    [(#"POST" (list "next-day"))
-     (set! the-day (add-days the-day 1))
-     (sea-otter "/index.html")]
-    [(#"GET" (list "style.css"))
-     (response/output (λ (out) (write-string css out)) #:mime-type #"text/css; charset=utf-8")]
-    [(method path)
-     (printf "not found: ~a, ~a, ~s~n" method path bindings)
-     (not-found user)]))
+  (define method (request-method req))
+  (match* (method user)
+    [(#"POST" #f) unauthorized]
+    [(_ _)
+     (match* (method (map path/param-path (url-path (request-uri req))))
+       [(#"GET" '("login")) (if user (sea-otter "/index.html") unauthorized)]
+       [(#"GET" (or '("") '("index.html")))
+        (define posts (get-posts r 'desc (before the-day)))
+        (define tags (apply tags-hash r (map post-day posts)))
+        (ok user
+            "Miniature weblog"
+            `((h1 "Miniature weblog")
+              (p "Today really is " ,(day->string the-day))
+              (form ([action "next-day"] [method "post"])
+                    (input ([type "submit"] [value "Next day plox"])))
+              (p "Posts:")
+              ,@(map (λ (p) (post->section user p (all-topics r)  tags)) posts)))]
+       [(method (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) rest ...))
+        (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
+        (if dy
+            (day-handler user method dy rest bindings)
+            (not-found user))]
+       [(method (list (regexp yr (list _ y)) (regexp mdr-dot-html (list _ m d))))
+        (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
+        (if dy
+            (day-handler user method dy '() bindings)
+            (not-found user))]
+       [(#"GET" (list (or "topics" "topics.html")))
+        (define new-topic
+          (if user
+              `((p "Create new topic:") ,new-topic-form)
+              '()))
+        (ok user
+            "Topics"
+            `((h1 "Topics")
+              ,@new-topic
+              ,@(map (λ (tp)
+                       (match tp
+                         [(topic sym name type)
+                          `(p (a ([href ,(symbol->url sym ".html")]) ,name))]))
+                     (topics-all (all-topics r)))))]
+       [(#"GET" (list "topic" (regexp #px"^(.+?)[.]html$" (list _ str))))
+        (define tp (get-topic r (string->symbol str)))
+        (match tp
+          [#f (not-found user)]
+          [(topic symbol name type)
+           (define tagged-posts (get-posts r 'asc (with-tag symbol)))
+           (define thread-posts (get-posts r 'asc (in-thread symbol)))
+           (define tags (apply tags-hash r (map post-day (append thread-posts tagged-posts))))
+           (define tags-html
+             (match tagged-posts
+               ['() '()]
+               [_ `((h2 "Posts with the \"" ,(symbol->string symbol) "\"-tag:")
+                    (table ,@(apply append (map post->tr tagged-posts))))]))
+           (match-define (list thread-first thread-rest)
+             (match thread-posts
+               ['() '(() ())]
+               [(list first rest ...)
+                `((,(post->section-in-thread user first tags))
+                  (,@(map (λ (p) (post->section-in-thread user p tags)) rest)))]))
+           (define edit
+             (if user
+                 `((p "Edit topic:") ,(topic->form tp))
+                 '()))
+           (ok user name `((h1 ,name) ,@edit ,@thread-first ,@tags-html ,@thread-rest))])]
+       [(#"POST" (list "topic" str "update"))
+        (define sym (string->symbol str))
+        (define tp (get-topic r sym))
+        (match tp
+          [#f (not-found user)]
+          [_ (match bindings
+               [`((name . ,name) (type . ,typestr))
+                (update-topic r (topic sym name (string->symbol typestr)))
+                (sea-otter (symbol->url sym ".html"))]
+               [_ (bad user '((h1 "Bad Request") (p "bad params :(")))])])]
+       [(#"POST" (list "topics" "create"))
+        (match bindings
+          [`((symbol . ,symstr) (name . ,name) (type . ,typestr))
+           (define sym (string->symbol symstr))
+           (define type (string->symbol typestr))
+           (cond [(get-topic r sym)
+                  (bad user '((h1 "Bad Request") (p "Topic " ,symstr " already exists")))]
+                 [else
+                  (create-topic r (topic sym name type))
+                  (sea-otter (symbol->url sym ".html"))])]
+          [_ (bad user '((h1 "Bad Request") (p "bad params :(")))])]
+       [(#"POST" (list "next-day"))
+        (set! the-day (add-days the-day 1))
+        (sea-otter "/index.html")]
+       [(#"GET" (list "style.css"))
+        (response/output (λ (out) (write-string css out)) #:mime-type #"text/css; charset=utf-8")]
+       [(method path)
+        (printf "not found: ~a, ~a, ~s~n" method path bindings)
+        (not-found user)])]))
 
 (serve/servlet
  servlet

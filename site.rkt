@@ -10,6 +10,9 @@
          day->url
          symbol->url
          topic->url
+         topic->form
+         new-topic-form
+         topic->form
          day/post->form
          post->section
          post->section-in-thread
@@ -19,19 +22,51 @@
 (define (post-inputs text symbol link topics)
   (define sym (or (and symbol (symbol->string symbol)) ""))
   `((label "Text: " (textarea ([name "text"]) ,text))
+    " "
     (label "Thread: " (input ([name "symbol"] [type "text"] [value ,sym] [list "topics"])))
+    " "
     (datalist ([id "topics"])
               ,@(map (λ (tp)
                        (match tp
                          [(topic symbol name _)
                           `(option ([value ,(symbol->string symbol)] [label ,name]))]))
                      (topics-threads topics)))
+    " "
     (label "Optionally a link: " (input ([name "link"] [type "text"] [value ,(or link "")])))
+    " "
     (input ([type "submit"] [value "Submit"]))))
 
 (define (day->url dy rest)
   (match dy
     [(day y m d) (format "/~a/~a-~a~a" (4pad y) (2pad m) (2pad d) rest)]))
+
+
+(define (topic-inputs name type)
+  (define (selected sym)
+    (if (equal? type sym)
+        '([selected "selected"])
+        '()))
+  `((label "Name: " (input ([type "text"] [name "name"] [value ,name])))
+    " "
+    (label "Suggested as thread/tag: "
+           (select ([name "type"])
+                   (option ([value "neither"] ,@(selected 'either)) "Neither")
+                   (option ([value "thread"] ,@(selected 'thread)) "Thread")
+                   (option ([value "tag"] ,@(selected 'tag)) "Tag")
+                   (option ([value "either"] ,@(selected 'either)) "Either")))
+    " "
+    (input ([type "submit"]))))
+
+(define new-topic-form
+  `(form ([method "post"] [action "/topics/create"])
+         (label "Symbol: " (input ([type "text"] [name "symbol"])))
+         ,@(topic-inputs "" 'neither)))
+
+(define (topic->form tp)
+  (match tp
+    [(topic sym name type)
+     `(form ([method "post"] [action ,(symbol->url sym "/update")])
+            ,@(topic-inputs name type))]))
 
 (define (symbol->url sym . rest)
   (format "/topic/~a~a" (symbol->string sym) (apply ~a rest)))
