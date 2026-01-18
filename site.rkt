@@ -16,6 +16,7 @@
          post->section
          post->section-in-thread
          post->tr
+         topics->table
          tag-forms)
 
 (define (post-inputs text symbol link topics)
@@ -112,7 +113,7 @@
                      [#f ""]
                      [(list s) s]))
      (define str (if (> (string-length start) 64)
-                     (substring start 0 61)
+                     (~a (substring start 0 61) "...")
                      start))
      `((tr (th (a ([href ,(day->url dy ".html")]) (time ,(day->string dy))))
            (td ,@(parseline str))))]))
@@ -210,3 +211,17 @@
   (if link
       `((tr (th "Links to:") (td (a ([href ,link]) ,link))))
       '()))
+
+(define (topics->table tps)
+  (match tps
+    [(topics _ all _ _)
+     `(table
+       (thead (tr (th "Topic") (th "Symbol") (th "Thread/tag")))
+       ,@(map topic-tr all))]))
+
+(define (topic-tr tp)
+  (match tp
+    [(topic sym name type)
+     `(tr (td (a ([href ,(symbol->url sym ".html")]) ,name))
+          (td ,(symbol->string sym))
+          (td ,(symbol->string type)))]))

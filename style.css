@@ -19,11 +19,11 @@ ins { text-decoration: none; background-color: #d4fcbc; color: #000000; }
 section { margin-left: 0.5rem; background: #F6F6F6; }
 section:target { outline: 2px solid #D3D3D3; }
 section > * { padding-left: 0.5rem; padding-right: 0.5rem; }
+section  th { padding-left: 0;  }
 header { border-bottom: 2px solid #D3D3D3; }
 footer { background: #D3D3D3; }
-dt, dd { display: inline; }
 dd { margin-inline-start: 1rem; }
-tr, th { text-align: left; }
-th { font-weight: normal; padding-right: 1rem; }
+thead { background: #D3D3D3; }
+th, td { font-weight: normal; text-align: left; padding-left: 0.5rem; padding-right: 0.5rem; }
 time { font-style: normal; }
 

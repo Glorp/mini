@@ -54,8 +54,6 @@
             (list (make-basic-auth-header "Authentication required"))
             void))
 
-
-
 (define (maybe-login req login?)
   (match (request->basic-credentials req)
     [#f #f]
@@ -184,11 +182,7 @@
               "Topics"
               `((h1 "Topics")
                 ,@new-topic
-                ,@(map (λ (tp)
-                         (match tp
-                           [(topic sym name type)
-                            `(p (a ([href ,(symbol->url sym ".html")]) ,name))]))
-                       (topics-all (all-topics r)))))]
+                ,(topics->table (all-topics r))))]
          [(#"GET" (list "topic" (regexp #px"^(.+?)[.]html$" (list _ str))))
           (define tp (get-topic r (string->symbol str)))
           (match tp
