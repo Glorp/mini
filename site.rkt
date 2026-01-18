@@ -135,7 +135,7 @@
 
 (define (edit-post-tr user dy)
   (if user
-      `((tr (th (a ([colspan "2"] [href ,(day->url dy "/edit")]) "Edit post"))))
+      `((tr (th ([colspan "2"]) (a ([href ,(day->url dy "/edit")]) "Edit post"))))
       '()))
 
 (define (post->section-in-thread user p tags)
