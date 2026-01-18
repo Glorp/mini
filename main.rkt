@@ -75,12 +75,16 @@
             (current-seconds) 
             TEXT/HTML-MIME-TYPE
             (list (make-basic-auth-header "Authentication required"))
-            void))  
-  
+            void))
+
+(define (login? user pwd)
+  #t)
+
 (define (maybe-login req)
   (match (request->basic-credentials req)
     [#f #f]
-    [(cons name pwd) (and (equal? pwd #"blapp") (bytes->string/utf-8 name))]))
+    [(cons userbytes pwdbytes)
+     (and (login? userbytes pwdbytes) (bytes->string/utf-8 userbytes))]))
 
 (define (store-post user dy bindings store)
   (match bindings
@@ -126,7 +130,7 @@
                         ,(post->section user p topics tags)
                         ,@(tag-forms dy topics tags))]
                    [else `((p "There's no existing post for " (time ,dstr) "."))])
-           ,(day/post->form dy p topics)))]
+           ,@(day/post->forms dy p topics)))]
     [(#"POST" '("create"))
      (if (get-post r dy)
          (bad user `((h1 "there's already a post for " (time ,dstr))))
@@ -139,6 +143,11 @@
      (if (get-post r dy)
          (store-post user dy bindings update-post)
          (bad user `((h1 "there's no post for " ,dstr " to edit. hmm!"))))]
+    [(#"POST" '("delete"))
+     (match (get-post r dy)
+       [#f (bad user `((h1 "there's no post for " ,dstr " to edit. hmm!")))]
+       [p (delete-post r p)
+          (sea-otter (day->url dy "/edit"))])]
     [(#"POST" '("tag")) (tag-handler user dy bindings tag)]
     [(#"POST" '("untag")) (tag-handler user dy bindings untag)]
     [(method path)
@@ -221,7 +230,7 @@
                   (,@(map (λ (p) (post->section-in-thread user p tags)) rest)))]))
            (define edit
              (if user
-                 `((p "Edit topic:") ,(topic->form tp))
+                 (topic->forms tp)
                  '()))
            (ok user name `((h1 ,name) ,@edit ,@thread-first ,@tags-html ,@thread-rest))])]
        [(#"POST" (list "topic" str "update"))
@@ -234,6 +243,13 @@
                 (update-topic r (topic sym name (string->symbol typestr)))
                 (sea-otter (symbol->url sym ".html"))]
                [_ (bad user '((h1 "Bad Request") (p "bad params :(")))])])]
+       [(#"POST" (list "topic" str "delete"))
+        (define sym (string->symbol str))
+        (define tp (get-topic r sym))
+        (match tp
+          [#f (not-found user)]
+          [_ (delete-topic r tp)
+             (sea-otter "/topics")])]
        [(#"POST" (list "topics" "create"))
         (match bindings
           [`((symbol . ,symstr) (name . ,name) (type . ,typestr))
@@ -258,9 +274,7 @@
  servlet
  #:stateless? #t
  #:servlet-regexp #rx""
- #:servlet-path "/index.html"
+ #:servlet-path "/login"
  #:extra-files-paths
  (list
   (build-path (current-directory) "static")))
-
-

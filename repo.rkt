@@ -11,10 +11,12 @@
          close-repo
          create-post
          update-post
+         delete-post
          get-post
          get-posts
          create-topic
          update-topic
+         delete-topic
          get-topic
          all-topics
          tag
@@ -83,6 +85,13 @@
                  (false->sql-null (and symbol (symbol->string symbol)))
                  (false->sql-null link)
                  (day->string day))]))
+
+(define (delete-post rp pst)
+  (match pst
+    [(post day text symbol link)
+     (define daystr (day->string day))
+     (query-exec (con rp) "DELETE FROM tagged WHERE day = $1" daystr)
+     (query-exec (con rp) "DELETE FROM post WHERE day = $1" daystr)]))
 
 (define (row->post row)
   (match row
@@ -159,6 +168,15 @@
                  name
                  (type->int type)
                  (symbol->string symbol))]))
+
+(define (delete-topic rp tp)
+  (set-repo-topics! rp #f)
+  (match tp
+    [(topic sym _ _)
+     (define symstr (symbol->string sym))
+     (query-exec (con rp) "DELETE FROM tagged WHERE symbol = $1" symstr)
+     (query-exec (con rp) "UPDATE post SET symbol = NULL WHERE symbol = $1" symstr)
+     (query-exec (con rp) "DELETE FROM topic WHERE symbol = $1" symstr)]))
 
 (define (row->topic row)
   (match row

@@ -10,10 +10,9 @@
          day->url
          symbol->url
          topic->url
-         topic->form
          new-topic-form
-         topic->form
-         day/post->form
+         topic->forms
+         day/post->forms
          post->section
          post->section-in-thread
          post->tr
@@ -62,11 +61,15 @@
          (label "Symbol: " (input ([type "text"] [name "symbol"])))
          ,@(topic-inputs "" 'neither)))
 
-(define (topic->form tp)
+(define (topic->forms tp)
   (match tp
     [(topic sym name type)
-     `(form ([method "post"] [action ,(symbol->url sym "/update")])
-            ,@(topic-inputs name type))]))
+     `((p "Edit topic:")
+       (form ([method "post"] [action ,(symbol->url sym "/update")])
+            ,@(topic-inputs name type))
+       (p "Delete topic:")
+       (form ([method "post"] [action ,(symbol->url sym "/delete")])
+         (input ([type "submit"] [name "submit"] [value "Delete"]))))]))
 
 (define (symbol->url sym . rest)
   (format "/topic/~a~a" (symbol->string sym) (apply ~a rest)))
@@ -78,18 +81,17 @@
 (define (day->form dy topics)
   `(form
     ([action ,(day->url dy "/create")] [method "post"])
-    "Make new post:"
-    (br)
     ,@(post-inputs "" #f #f topics)))
 
-(define (day/post->form dy p topics)
+(define (day/post->forms dy p topics)
   (match p
-    [#f (day->form dy topics)]
+    [#f `((p "Make new post:") ,(day->form dy topics))]
     [(post dy t sym link)
-     `(form
-       ([action ,(day->url dy "/update")] [method "post"])
-       (p "Edit existing post:")
-       ,@(post-inputs t sym link topics))]))
+     `((p "Edit post:")
+       (form ([action ,(day->url dy "/update")] [method "post"]) ,@(post-inputs t sym link topics))
+       (p "Delete post:")
+       (form ([action ,(day->url dy "/delete")] [method "post"])
+             (input ([type "submit"] [name "submit"] [value "Delete"]))))]))
 
 (define (thread-link tp)
   (match tp
