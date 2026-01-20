@@ -40,6 +40,7 @@
 (define mdr #px"^(\\d\\d)-(\\d\\d)$")
 (define mdr-dot-html #px"^(\\d\\d)-(\\d\\d)[.]html$")
 (define yr #px"^(\\d\\d\\d\\d)$")
+(define mr-dot-html #px"^(\\d\\d)[.]html$")
 
 (define (lfstring str)
   (regexp-replace* #px"\r\n?" str "\n"))
@@ -60,8 +61,11 @@
     [(cons userbytes pwdbytes)
      (and (login? userbytes pwdbytes) (bytes->string/utf-8 userbytes))]))
 
-(define (servlet r login? get-today)
 
+(define per-page 2)
+  
+
+(define (servlet r login? get-today)
   (define (store-post user dy bindings store)
     (match bindings
       [`((text . ,crlftext) (symbol . ,symtext) (link . ,linktext))
@@ -173,6 +177,31 @@
           (if dy
               (day-handler user method dy '() bindings)
               (not-found user))]
+         [(#"GET" (list "archive.html"))
+          (define title "Archive")
+          (displayln (get-posts r 'asc #:limit 1))
+          (match (get-posts r 'asc #:limit 1)
+            ['() (ok user title `((h1 ,title) (p "There are no posts.")))]
+            [(list (post (day y m _) _ _ _))
+             (ok user
+                 title
+                 `((h1 ,title)
+                   (p (a ([href ,(format "/~a/~a.html" (4pad y) (2pad m))])
+                         ,(format "~a-~a" (4pad y) (2pad m))))))])]
+         [(#"GET" (list (regexp yr (list _ y)) (regexp mr-dot-html (list _ m))))
+          (define dy (maybe-day (string->number y) (string->number m) 1))
+          (match dy
+            [#f (not-found user)]
+            [(day y m _)
+             (define prev (add-days dy -1))
+             (define next (normalized-day y (+ m 1) 1))
+             (define posts (get-posts r 'asc (after prev) (before next)))
+             (define tags (apply tags-hash r (map post-day posts)))
+             (define title (format "Archive:  ~a-~a" (4pad y) (2pad m)))
+             (ok user
+                 title
+                 `((h1 ,title)
+                   ,@(map (λ (p) (post->section user p (all-topics r)  tags)) posts)))])]
          [(#"GET" (list (or "topics" "topics.html")))
           (define new-topic
             (if user

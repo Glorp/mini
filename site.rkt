@@ -191,8 +191,10 @@
 
 (define (header user)
   `(header (nav (ol (li (a ([href "/index.html"]) "Index"))
-                      " "
-                      (li (a ([href "/topics.html"]) "Topics"))))))
+                    " "
+                    (li (a ([href "/topics.html"]) "Topics"))
+                    " "
+                    (li (a ([href "/archive.html"]) "Archive"))))))
 
 (define (page user title content)
   (define loggedin

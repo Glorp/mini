@@ -111,11 +111,16 @@
     [(list row) (row->post row)]
     [_ (error 'get-post "weird result: ~a" rows)]))
 
-(define (get-posts rp direction . filters)
+(define (get-posts rp direction #:limit [limit #f] . filters)
   (define order
     (match direction
       ['asc "ASC"]
       ['desc "DESC"]))
+  (define limitstr
+    (match limit
+      [#f ""]
+      [(? exact-positive-integer?) (format " LIMIT ~a" limit)]
+      [_ (error 'get-posts "bad limit value: ~a" limit)]))
   (define clauses
     (for/list ([filter filters] [n (in-naturals 1)])
       (match filter
@@ -132,7 +137,10 @@
   (define rows
     (apply query-rows
            (con rp)
-           (format "SELECT day, text, symbol, link FROM post~a ORDER BY day ~a" where order)
+           (format "SELECT day, text, symbol, link FROM post~a ORDER BY day ~a~a"
+                   where
+                   order
+                   limitstr)
            values))
   (map row->post rows))
 

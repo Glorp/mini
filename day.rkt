@@ -4,6 +4,7 @@
 
 (provide (struct-out day)
          maybe-day
+         normalized-day
          seconds->day
          today
          day->string
@@ -32,20 +33,20 @@
       29
       (vector-ref days-per-month m)))
 
-(define (normalize y m d)
-  (cond [(> m 12) (normalize (+ y 1) (- m 12) d)]
-        [(< m 1) (normalize (- y 1) (+ m 12) d)]
+(define (normalized-day y m d)
+  (cond [(> m 12) (normalized-day (+ y 1) (- m 12) d)]
+        [(< m 1) (normalized-day (- y 1) (+ m 12) d)]
         [else
          (define days (days-in-month y m))
          (cond
-           [(> d days) (normalize y (+ m 1) (- d days))]
-           [(< d 1) (normalize y (- m 1) (+ d (days-in-month y (- m 1))))]
+           [(> d days) (normalized-day y (+ m 1) (- d days))]
+           [(< d 1) (normalized-day y (- m 1) (+ d (days-in-month y (- m 1))))]
            [else (day y m d)])]))
 
 (define (add-days dy i)
   (match dy
     [(day y m d)
-     (normalize y m (+ d i))]))
+     (normalized-day y m (+ d i))]))
 
 (define (next-day dy)
   (add-days dy 1))
