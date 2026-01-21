@@ -174,20 +174,19 @@
                                               (halp rest (cons symbol adds) removes))]))
   (match (halp (topics-tags topics) '() '())
     [(list adds removes)
-     `((form ([method "post"] [action ,(day->url dy "/tag")])
-             (p "Add a tag:")
-             ,@(map (λ (tag)
-                      `(input ([type "submit"]
-                               [name ,(symbol->string tag)]
-                               [value ,(symbol->string tag)])))
-                    adds))
-       (form ([method "post"] [action ,(day->url dy "/untag")])
-             (p "Remove a tag:")
-             ,@(map (λ (tag)
-                      `(input ([type "submit"]
-                               [name ,(symbol->string tag)]
-                               [value ,(symbol->string tag)])))
-                    removes)))]))
+     `(,@(tag-form "Add a tag:" (day->url dy "/tag") adds)
+       ,@(tag-form "Remove a tag:" (day->url dy "/untag") removes))]))
+
+(define (tag-form title action tags)
+  (if (empty? tags)
+      '()
+      `((p ,title)
+        (form ([class "tags"] [method "post"] [action ,action])
+              ,@(map (λ (tag)
+                       `(input ([type "submit"]
+                                [name ,(symbol->string tag)]
+                                [value ,(symbol->string tag)])))
+                     tags)))))
 
 (define (header user)
   `(header (nav (ol (li (a ([href "/index.html"]) "Index"))

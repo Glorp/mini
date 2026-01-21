@@ -14,7 +14,7 @@
   (seteq 'br 'hr 'img 'input 'link 'meta))
 (define normal-attributes
   (seteq 'lang 'charset 'rel 'alt 'href 'id 'src 'type 'action 'name 'value 'method 'colspan 'list
-         'label 'selected))
+         'label 'selected 'class))
 (define boolean-attributes
   (seteq 'checked))
 
