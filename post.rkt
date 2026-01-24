@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/match
+(require (only-in racket/match match)
          "day.rkt")
 (provide (struct-out post)
          (struct-out topic)

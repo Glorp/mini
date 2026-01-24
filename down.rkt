@@ -1,6 +1,6 @@
 #lang racket/base
-(require racket/match
-         racket/string)
+(require (only-in racket/match match)
+         (only-in racket/string non-empty-string? string-trim string-split))
 
 (provide parsedown
          parseline)

@@ -1,16 +1,26 @@
 #lang racket/base
 
-(require racket/match
-         racket/string
-         racket/format
-         racket/file
-         web-server/servlet
+(require (only-in racket/match match match* match-define)
+         (only-in racket/string non-empty-string? string-trim)
+         (only-in racket/format ~s)
+         (only-in racket/file file->string)
+         (only-in web-server/servlet
+                  response
+                  response/output
+                  request-method
+                  request-bindings
+                  path/param-path
+                  header
+                  url-path
+                  request-uri
+                  make-basic-auth-header
+                  request->basic-credentials
+                  TEXT/HTML-MIME-TYPE)
          "day.rkt"
          "post.rkt"
          "repo.rkt"
-         "html.rkt"
-         "down.rkt"
-         "site.rkt")
+         "write-html.rkt"
+         "html.rkt")
 
 (provide servlet)
 

@@ -1,9 +1,16 @@
 #lang racket/base
-(require racket/match
-         racket/list
-         racket/string
-         racket/format
-         db
+(require (only-in racket/match match match*)
+         (only-in racket/string string-join)
+         (only-in racket/format ~a)
+         (only-in db
+                  sqlite3-connect
+                  disconnect
+                  query-exec
+                  query-rows
+                  query-row
+                  false->sql-null
+                  sql-null->false
+                  exn:fail:sql?)
          "day.rkt"
          "post.rkt")
 
@@ -130,10 +137,10 @@
         [(with-tag symbol) (list (format "day IN (SELECT day FROM tagged WHERE symbol = $~a)" n)
                                  (symbol->string symbol))])))
   (define where
-    (if (empty? clauses)
-        ""
-        (string-join (map first clauses) " AND " #:before-first " WHERE ")))
-  (define values (map second clauses))
+    (match clauses 
+        ['() ""]
+        [_ (string-join (map car clauses) " AND " #:before-first " WHERE ")]))
+  (define values (map cadr clauses))
   (define rows
     (apply query-rows
            (con rp)
@@ -285,8 +292,8 @@
   (check-equal? (get-posts r 'asc (in-thread 'hello)) (list p1 p3))
   (check-equal? (get-posts r 'asc) all)
   (check-equal? (get-posts r 'desc) (reverse all))
-  (check-equal? (get-posts r 'asc (after (day 2026 01 01))) (rest all))
-  (check-equal? (get-posts r 'desc (before (day 2026 01 03))) (rest (reverse all)))
+  (check-equal? (get-posts r 'asc (after (day 2026 01 01))) (cdr all))
+  (check-equal? (get-posts r 'desc (before (day 2026 01 03))) (cdr (reverse all)))
   (check-equal? (get-posts r
                            'desc
                            (before (day 2026 01 03))

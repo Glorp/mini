@@ -1,6 +1,6 @@
 #lang racket/base
-(require racket/match
-         racket/format)
+(require (only-in racket/match match)
+         (only-in racket/format ~a))
 
 (provide (struct-out day)
          maybe-day

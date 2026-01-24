@@ -1,6 +1,6 @@
 #lang racket/base
-(require web-server/servlet-env
-         racket/format
+(require (only-in web-server/servlet-env serve/servlet)
+         (only-in racket/format ~a)
          "servlet.rkt"
          "repo.rkt"
          "day.rkt"
