@@ -49,8 +49,6 @@
   (define htmlx (page user "400 Bad Request :(" content))
   (response 400 #"Not Found" (current-seconds) TEXT/HTML-MIME-TYPE '() (out-html htmlx)))
 
-(define index '(a ([href "/index.html"]) "back to index"))
-
 (define mdr #px"^(\\d\\d)-(\\d\\d)$")
 (define mdr-dot-html #px"^(\\d\\d)-(\\d\\d)[.]html$")
 (define yr #px"^(\\d\\d\\d\\d)$")
@@ -85,6 +83,7 @@
     (define user (maybe-login req login?))
     (define method (request-method req))
     (define path (map path/param-path (url-path (request-uri req))))
+    
     (match* (method user)
       [(#"POST" #f) unauthorized]
       [(_ _)
@@ -109,7 +108,7 @@
                   [(and symbol (not tp))
                    (bad user `((h1 "\"" ,symtext "\" does not refer to an existing topic")))]
                   [else (store r (post dy text symbol link))
-                        (sea-otter "./edit")])]
+                        (sea-otter (day->url dy "/edit"))])]
            [_ (bad user
                    `((h1 "bad parameters")
                      (p ,(~s bindings) " <- what is ??")
@@ -117,21 +116,12 @@
 
        (define (day-handler dy rest)
          (define dstr (day->string dy))
-         (define p (and dy (get-post r dy)))
+         (define p (get-post r dy))
          (match* (method rest)
            [(#"GET" '())
-            (ok (day->page r user dy))]
+            (ok (day-page r user dy))]
            [(#"GET" '("edit"))
-            (define topics (all-topics r))
-            (define tags (tags-hash r dy))
-            (old-ok user
-                    dstr
-                    `((h1 ,dstr)
-                      ,@(cond [p `((p "Existing post:")
-                                   ,(post->section user p topics tags)
-                                   ,@(tag-forms dy topics tags))]
-                              [else `((p "There's no existing post for " (time ,dstr) "."))])
-                      ,@(day/post->forms dy p topics)))]
+            (ok (edit-post-page r user dy))]
            [(#"POST" '("create"))
             (if (get-post r dy)
                 (bad user `((h1 "there's already a post for " (time ,dstr))))
@@ -161,88 +151,29 @@
                    [tp (tag/untag r p tp)
                        (sea-otter (day->url dy "/edit"))])]
                 [_ (bad user `((h1 "bad params. hmm!")))])]))
-
        
        (match* (method path)
          [(#"GET" '("login")) (if user (sea-otter "/index.html") unauthorized)]
-         [(#"GET" (or '("") '("index.html")))
-          (define posts (get-posts r 'desc (before the-day)))
-          (define tags (apply tags-hash r (map post-day posts)))
-          (old-ok user
-                  "Miniature weblog"
-                  `((h1 "Miniature weblog")
-                    ,@(if user
-                          `((p "Today really is: "
-                               (a ([href ,(day->url the-day "/edit")])
-                                  ,(day->string the-day))
-                               "."))
-                          '())
-                    ,@(map (λ (p) (post->section user p (all-topics r)  tags)) posts)))]
+         [(#"GET" (or '("") '("index.html"))) (ok (index r user the-day))]
          [(method (list (regexp yr (list _ y)) (regexp mdr (list _ m d)) rest ...))
-          (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-          (if dy
-              (day-handler dy rest)
-              (not-found user))]
-         [(method (list (regexp yr (list _ y)) (regexp mdr-dot-html (list _ m d))))
-          (define dy (maybe-day (string->number y) (string->number m) (string->number d)))
-          (if dy
-              (day-handler dy '())
-              (not-found user))]
-         [(#"GET" (list "archive.html"))
-          (define title "Archive")
-          (match* (the-day (get-posts r 'asc #:limit 1))
-            [(_ '()) (old-ok user title `((h1 ,title) (p "There are no posts.")))]
-            [((day to-y to-m _) (list (post (day from-y from-m _) _ _ _)))
-             (define res
-               (apply
-                append
-                (for/list ([y (in-range from-y (+ to-y 1))])
-                  (define months
-                    (for/list ([m (in-range 1 13)]
-                               #:unless (or (and (= y from-y) (< m from-m))
-                                            (and (= y to-y) (> m to-m))))
-                      `(", "
-                        (a ([href ,(format "/~a/~a.html" (4pad y) (2pad m))])
-                           ,(format "~a" (2pad m))))))
-                  `((h2 ,(4pad y)) ,@(cdr (apply append months))))))
-                 
-             (old-ok user
-                     title
-                     `((h1 ,title)
-                       ,@res))])]
+          (match (maybe-day (string->number y) (string->number m) (string->number d))
+            [#f (not-found user)]
+            [dy (day-handler dy rest)])]
+         [(#"GET" (list (regexp yr (list _ y)) (regexp mdr-dot-html (list _ m d))))
+          (match (maybe-day (string->number y) (string->number m) (string->number d))
+            [#f (not-found user)]
+            [dy (ok (day-page r user dy))])]
+         [(#"GET" (list "archive.html")) (ok (archive-page r user the-day))]
          [(#"GET" (list (regexp yr (list _ y)) (regexp mr-dot-html (list _ m))))
           (define dy (maybe-day (string->number y) (string->number m) 1))
           (match dy
             [#f (not-found user)]
-            [(day y m _)
-             (define prev (add-days dy -1))
-             (define next (normalized-day y (+ m 1) 1))
-             (define posts (get-posts r 'asc (after prev) (before next)))
-             (define tags (apply tags-hash r (map post-day posts)))
-             (define title (format "Archive:  ~a-~a" (4pad y) (2pad m)))
-             (old-ok user
-                     title
-                     `((h1 ,title)
-                       ,@(map (λ (p) (post->section user p (all-topics r)  tags)) posts)))])]
-         [(#"GET" (list (or "topics" "topics.html")))
-          (define new-topic
-            (if user
-                `((p "Create new topic:") ,new-topic-form)
-                '()))
-          (old-ok user
-                  "Topics"
-                  `((h1 "Topics")
-                    ,@new-topic
-                    ,(topics->table (all-topics r))))]
+            [(day y m _) (ok (month-page r user y m))])]
+         [(#"GET" (list "topics.html")) (ok (topics-page r user))]
          [(#"GET" (list "topic" (regexp #px"^(.+?)[.]html$" (list _ str))))
-          (define tp (get-topic r (string->symbol str)))
-          (match tp
+          (match (get-topic r (string->symbol str))
             [#f (not-found user)]
-            [(topic symbol name type)
-             (define tagged-posts (get-posts r 'asc (with-tag symbol)))
-             (define thread-posts (get-posts r 'asc (in-thread symbol)))
-             (define tags (apply tags-hash r (map post-day (append thread-posts tagged-posts))))
-             (old-ok user name (topic-content user tp thread-posts tagged-posts tags))])]
+            [tp (ok (topic-page r user tp))])]
          [(#"POST" (list "topic" str "update"))
           (define sym (string->symbol str))
           (define tp (get-topic r sym))
@@ -259,7 +190,7 @@
           (match tp
             [#f (not-found user)]
             [_ (delete-topic r tp)
-               (sea-otter "/topics")])]
+               (sea-otter "/topics.html")])]
          [(#"POST" (list "topics" "create"))
           (match bindings
             [`((symbol . ,symstr) (name . ,name) (type . ,typestr))
